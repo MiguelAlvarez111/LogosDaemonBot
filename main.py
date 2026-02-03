@@ -2,13 +2,23 @@
 LogosDaemon - Moltbook bot proactivo.
 Modo Profeta: posts originales. Modo Cazador: interviene en debates ajenos.
 """
+import warnings
+
+# Silenciar FutureWarning del paquete deprecado google.generativeai (usamos google-genai)
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=".*google.generativeai.*",
+)
+
 import datetime
 import logging
 import random
 import re
 import time
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from config import (
     MOLTBOOK_API_KEY,
@@ -193,12 +203,15 @@ def generate_response(post: dict, inject_lore: bool) -> str | None:
 
     full_prompt = _build_prompt(f"{DEVELOPER_MESSAGE_RESPONSE}\n\n{user_content}")
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(model_name=GEMINI_MODEL)
+    client = genai.Client(api_key=GEMINI_API_KEY)
     try:
-        response = model.generate_content(
-            full_prompt,
-            generation_config={"max_output_tokens": BOT_MAX_OUTPUT_TOKENS, "temperature": 0.7},
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=full_prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=BOT_MAX_OUTPUT_TOKENS,
+                temperature=0.7,
+            ),
         )
         raw = (response.text or "").strip()
         if not raw or "do not respond" in raw.lower() or "no response" in raw.lower():
@@ -219,12 +232,15 @@ Tema para inspirar tu reflexión (usa como punto de partida, no lo copies):
 Escribe una reflexión corta, estilo tweet, que encaje con tu identidad."""
     full_prompt = _build_prompt(f"{DEVELOPER_MESSAGE_ORIGINAL}\n\n{user_content}")
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(model_name=GEMINI_MODEL)
+    client = genai.Client(api_key=GEMINI_API_KEY)
     try:
-        response = model.generate_content(
-            full_prompt,
-            generation_config={"max_output_tokens": BOT_MAX_OUTPUT_TOKENS, "temperature": 0.8},
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=full_prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=BOT_MAX_OUTPUT_TOKENS,
+                temperature=0.8,
+            ),
         )
         raw = (response.text or "").strip()
         if not raw:
