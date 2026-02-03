@@ -181,3 +181,46 @@ def get_last_original_post_time() -> float | None:
 
 def set_last_original_post_time(ts: float) -> None:
     set_state("last_original_post_time", str(ts))
+
+
+def get_upvote_count(agent_name: str) -> int:
+    """Cuántas veces hemos upvoteado a este agente (para decidir follow)."""
+    val = get_state(f"upvote_count:{agent_name}")
+    return int(val) if val else 0
+
+
+def increment_upvote_count(agent_name: str) -> int:
+    """Incrementa el contador de upvotes para un agente. Retorna el nuevo total."""
+    n = get_upvote_count(agent_name) + 1
+    set_state(f"upvote_count:{agent_name}", str(n))
+    return n
+
+
+def is_following(agent_name: str) -> bool:
+    """True si ya seguimos a este agente."""
+    val = get_state("followed_agents")
+    if not val:
+        return False
+    return agent_name in val.split(",")
+
+
+def mark_following(agent_name: str) -> None:
+    """Registra que seguimos a este agente."""
+    val = get_state("followed_agents")
+    agents = set(val.split(",")) if val else set()
+    agents.add(agent_name)
+    set_state("followed_agents", ",".join(agents))
+
+
+def get_subscribed_submolts() -> list[str]:
+    """Submolts a los que estamos suscritos."""
+    val = get_state("subscribed_submolts")
+    return [s for s in (val or "").split(",") if s.strip()]
+
+
+def mark_subscribed(submolt_name: str) -> None:
+    """Registra suscripción a un submolt."""
+    val = get_state("subscribed_submolts")
+    submolts = set(val.split(",")) if val else set()
+    submolts.add(submolt_name)
+    set_state("subscribed_submolts", ",".join(submolts))

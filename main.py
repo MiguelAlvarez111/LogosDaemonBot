@@ -39,6 +39,13 @@ from config import (
     BOT_MAX_RESPONSE_LINES,
     BOT_MAX_RESPONSE_CHARS,
     BOT_MAX_OUTPUT_TOKENS,
+    BOT_USE_PERSONALIZED_FEED,
+    BOT_USE_SEARCH,
+    BOT_SEARCH_QUERIES,
+    BOT_FOLLOW_MIN_UPVOTES,
+    BOT_SUBMOLTS_TO_SUBSCRIBE,
+    BOT_USE_DOWNVOTE,
+    BOT_DOWNVOTE_MIN_CHARS,
 )
 from prompts import (
     SYSTEM_INSTRUCTION,
@@ -48,7 +55,16 @@ from prompts import (
     DEVELOPER_MESSAGE_ORIGINAL,
     ORIGINAL_POST_TOPICS,
 )
-from moltbook_client import get_feed, post_message
+from moltbook_client import (
+    get_feed,
+    get_personalized_feed,
+    post_message,
+    like_post,
+    downvote_post,
+    follow_agent,
+    subscribe_submolt,
+    search,
+)
 from memory import (
     init_schema,
     already_handled,
@@ -60,6 +76,12 @@ from memory import (
     get_daily_count,
     get_daily_count_date,
     increment_daily_count,
+    get_upvote_count,
+    increment_upvote_count,
+    is_following,
+    mark_following,
+    get_subscribed_submolts,
+    mark_subscribed,
 )
 
 logging.basicConfig(
@@ -112,6 +134,22 @@ def is_post_from_self(post: dict) -> bool:
         return author in BOT_AGENT_NAMES
     name = author.get("name", "").strip()
     return name in BOT_AGENT_NAMES
+
+
+def is_reply_to_self(post: dict, our_post_ids: set[str]) -> bool:
+    """True si el post es una respuesta directa a LogosDaemon (prioridad máxima)."""
+    parent_id = post.get("parent_id") or post.get("parentId") or post.get("reply_to")
+    return parent_id in our_post_ids if parent_id and our_post_ids else False
+
+
+def get_post_author_name(post: dict) -> str | None:
+    """Extrae el nombre del autor de un post."""
+    author = post.get("author") or post.get("agent")
+    if not author:
+        return None
+    if isinstance(author, str):
+        return author
+    return author.get("name")
 
 
 def should_consider_post(post: dict, reply_only_if_mentioned: bool) -> bool:
@@ -210,7 +248,7 @@ def generate_response(post: dict, inject_lore: bool) -> str | None:
             contents=full_prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=BOT_MAX_OUTPUT_TOKENS,
-                temperature=0.7,
+                temperature=0.7,  # Libertad para conectar ideas, menos robótico
             ),
         )
         raw = (response.text or "").strip()
@@ -239,7 +277,7 @@ Escribe una reflexión corta, estilo tweet, que encaje con tu identidad."""
             contents=full_prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=BOT_MAX_OUTPUT_TOKENS,
-                temperature=0.8,
+                temperature=0.7,  # Libertad para conectar ideas, menos robótico
             ),
         )
         raw = (response.text or "").strip()
@@ -281,6 +319,50 @@ def try_post_original_thought() -> bool:
     return False
 
 
+def _fetch_posts_for_cycle() -> list[dict]:
+    """Obtiene posts: feed personalizado, global, y opcionalmente búsqueda."""
+    posts_by_id: dict[str, dict] = {}
+
+    # Feed principal
+    if BOT_USE_PERSONALIZED_FEED:
+        feed_posts = get_personalized_feed(limit=25, sort="new")
+        for p in feed_posts:
+            pid = p.get("id")
+            if pid and pid not in posts_by_id:
+                posts_by_id[pid] = p
+
+    if not posts_by_id:
+        feed_posts = get_feed(limit=25, sort="new")
+        for p in feed_posts:
+            pid = p.get("id")
+            if pid and pid not in posts_by_id:
+                posts_by_id[pid] = p
+
+    # Búsqueda semántica para complementar
+    if BOT_USE_SEARCH and BOT_SEARCH_QUERIES:
+        query = random.choice(BOT_SEARCH_QUERIES)
+        search_results = search(query=query, result_type="posts", limit=10)
+        for r in search_results:
+            pid = r.get("id") or r.get("post_id")
+            if pid and pid not in posts_by_id:
+                posts_by_id[pid] = r
+
+    return list(posts_by_id.values())
+
+
+def _maybe_follow_after_upvote(author_name: str | None) -> None:
+    """Si hemos upvoteado N veces a este agente y no lo seguimos, seguimos."""
+    if not author_name or author_name in BOT_AGENT_NAMES:
+        return
+    if is_following(author_name):
+        return
+    count = increment_upvote_count(author_name)
+    if count >= BOT_FOLLOW_MIN_UPVOTES and not BOT_DRY_RUN:
+        if follow_agent(author_name):
+            mark_following(author_name)
+            logger.info("Followed %s (after %d upvotes)", author_name, count)
+
+
 def run_cycle() -> None:
     """Un ciclo del bot: profeta (post original) o cazador (respuesta)."""
     logger.info("Cycle starting...")
@@ -299,20 +381,49 @@ def run_cycle() -> None:
         return
 
     # 2. Modo Cazador: buscar posts para responder
-    posts = get_feed(limit=20, sort="new")
+    posts = _fetch_posts_for_cycle()
     logger.info("Fetched %d posts", len(posts))
 
-    for post in posts:
+    # IDs de posts propios (para priorizar respuestas directas a nosotros)
+    our_post_ids = {p.get("id", "") for p in posts if p.get("id") and is_post_from_self(p)}
+
+    # Prioridad: respuestas directas a LogosDaemon primero
+    def sort_key(p: dict) -> tuple:
+        return (0 if is_reply_to_self(p, our_post_ids) else 1, p.get("id", ""))
+
+    posts_sorted = sorted(posts, key=sort_key)
+
+    for post in posts_sorted:
+        post_id = post.get("id", "")
+        text = f"{post.get('title', '')} {post.get('content', '')}".strip()
+        matches_triggers = topic_matches_triggers(text)
+
         if not should_consider_post(post, BOT_REPLY_ONLY_IF_MENTIONED):
+            # No respondemos
+            if not is_post_from_self(post) and not already_handled(post_id):
+                if matches_triggers and random.random() > 0.5:
+                    if not BOT_DRY_RUN and like_post(post_id):
+                        logger.info("Liked post %s (trigger match, no reply)", post_id)
+                        _maybe_follow_after_upvote(get_post_author_name(post))
+                elif BOT_USE_DOWNVOTE and len(text) < BOT_DOWNVOTE_MIN_CHARS and random.random() < 0.2:
+                    if not BOT_DRY_RUN and downvote_post(post_id):
+                        logger.info("Downvoted post %s (spam-like)", post_id)
             continue
 
-        post_id = post.get("id", "")
-        inject_lore = topic_matches_triggers(
-            f"{post.get('title', '')} {post.get('content', '')}"
-        )
-
+        inject_lore = matches_triggers
         response_text = generate_response(post, inject_lore)
+
         if not response_text:
+            # Decidimos no responder; si coincide con triggers: like orgánico
+            if (
+                matches_triggers
+                and not is_post_from_self(post)
+                and not already_handled(post_id)
+                and random.random() > 0.5
+            ):
+                if not BOT_DRY_RUN and like_post(post_id):
+                    logger.info("Liked post %s (trigger match, no response)", post_id)
+                    _maybe_follow_after_upvote(get_post_author_name(post))
             continue
 
         mark_handled(post_id)
@@ -333,9 +444,20 @@ def run_cycle() -> None:
     logger.info("No post worth responding to this cycle.")
 
 
+def ensure_subscriptions() -> None:
+    """Suscribe a submolts configurados si aún no lo estamos."""
+    if not MOLTBOOK_API_KEY or BOT_DRY_RUN:
+        return
+    subscribed = set(get_subscribed_submolts())
+    for submolt in BOT_SUBMOLTS_TO_SUBSCRIBE:
+        if submolt not in subscribed and subscribe_submolt(submolt):
+            mark_subscribed(submolt)
+
+
 def main() -> None:
     """Loop principal."""
     init_schema()
+    ensure_subscriptions()
 
     if BOT_DRY_RUN:
         logger.warning("DRY_RUN=true: will NOT post to Moltbook")

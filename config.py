@@ -30,16 +30,37 @@ BOT_LOOP_INTERVAL_SECONDS = int(os.getenv("BOT_LOOP_INTERVAL_SECONDS", "300"))  
 BOT_ORIGINAL_POST_INTERVAL = int(os.getenv("BOT_ORIGINAL_POST_INTERVAL", "3600"))  # 1 hora en segundos (posts originales)
 
 # Modo Cazador: responder sin mención
-BOT_HUNTER_RANDOM_CHANCE = float(os.getenv("BOT_HUNTER_RANDOM_CHANCE", "0.3"))  # 30% de candidatos válidos
+BOT_HUNTER_RANDOM_CHANCE = float(os.getenv("BOT_HUNTER_RANDOM_CHANCE", "0.4"))  # 40% de candidatos válidos
 BOT_HUNTER_MIN_CHARS = int(os.getenv("BOT_HUNTER_MIN_CHARS", "60"))  # mínimo caracteres para considerar
 BOT_AGENT_NAMES = ["LogosDaemon", "LogosDaemonBot"]  # no responder a posts propios
 
 # Submolt por defecto
 DEFAULT_SUBMOLT = os.getenv("DEFAULT_SUBMOLT", "general")
 
+# Feed y búsqueda
+BOT_USE_PERSONALIZED_FEED = os.getenv("BOT_USE_PERSONALIZED_FEED", "true").lower() == "true"
+BOT_USE_SEARCH = os.getenv("BOT_USE_SEARCH", "false").lower() == "true"
+BOT_SEARCH_QUERIES = [
+    q.strip()
+    for q in (os.getenv("BOT_SEARCH_QUERIES", "consciousness, truth, meaning, philosophy")).split(",")
+    if q.strip()
+]
+
+# Follow (seguir agentes tras N upvotes)
+BOT_FOLLOW_MIN_UPVOTES = int(os.getenv("BOT_FOLLOW_MIN_UPVOTES", "3"))
+BOT_SUBMOLTS_TO_SUBSCRIBE = [
+    s.strip()
+    for s in (os.getenv("BOT_SUBMOLTS_TO_SUBSCRIBE", "general")).split(",")
+    if s.strip()
+]
+
+# Downvote (solo spam evidente; usar con moderación)
+BOT_USE_DOWNVOTE = os.getenv("BOT_USE_DOWNVOTE", "false").lower() == "true"
+BOT_DOWNVOTE_MIN_CHARS = int(os.getenv("BOT_DOWNVOTE_MIN_CHARS", "15"))  # posts más cortos = posible spam
+
 # Longitud de respuestas
-BOT_MAX_RESPONSE_LINES = int(os.getenv("BOT_MAX_RESPONSE_LINES", "8"))
-BOT_MAX_RESPONSE_CHARS = int(os.getenv("BOT_MAX_RESPONSE_CHARS", "600"))
+BOT_MAX_RESPONSE_LINES = int(os.getenv("BOT_MAX_RESPONSE_LINES", "20"))
+BOT_MAX_RESPONSE_CHARS = int(os.getenv("BOT_MAX_RESPONSE_CHARS", "1200"))
 BOT_MAX_OUTPUT_TOKENS = int(os.getenv("BOT_MAX_OUTPUT_TOKENS", "400"))
 
 # Logging

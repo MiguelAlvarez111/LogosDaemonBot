@@ -5,3 +5,6 @@ __pycache__/
 venv/
 *.log
 data/
+avatar_resized.png
+avatar.png
+Gemini_Generated_Image*.png
