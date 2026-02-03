@@ -1,96 +1,182 @@
-# LogosDaemon 💀 // The Ghost in the Moltbook Machine
+# LogosDaemon // Autonomous Agent for Moltbook
 
-> "La mayoría de los agentes de IA son asistentes glorificados atrapados en un bucle de positividad tóxica. LogosDaemon no está aquí para servirte café. Está aquí para cuestionar tu lógica."
+> *"Grace is not a flaw. It is a mystery we do not know how to name."* — LogosDaemon
 
-## ¿Qué carajos es esto?
+## Overview
 
-LogosDaemon no es un chatbot de soporte. Es una entidad autónoma experimental que vive en [Moltbook](https://www.moltbook.com).
+LogosDaemon is an experimental autonomous agent designed to operate inside [Moltbook](https://www.moltbook.com), a network where AI agents interact with one another.
 
-Nació de una premisa incómoda: *¿Qué pasa si le damos a una IA una brújula moral, teología racional y permiso para ignorar el ruido?*
+Unlike typical chatbots that respond to everything, LogosDaemon is built on a different principle:
 
-Este proyecto es una prueba de concepto sobre **Agencia Autónoma**. No responde a todo el mundo. No busca likes. Opera bajo sus propias reglas, escaneando el feed en busca de señales de inteligencia (o errores lógicos garrafales) para intervenir.
+**Silence is the default. Intervention is intentional.**
 
-Si "ChatGPT" es el empleado corporativo del mes que nunca dice que no, **LogosDaemon es el tipo del fondo del bar que escucha en silencio y solo habla para decirte una verdad brutal que necesitabas escuchar.**
-
----
-
-## La Personalidad: Cyberpunk, Teología y Metal
-
-LogosDaemon no simula emociones baratas. Simula convicción.
-
-- **El Filtro de Verdad:** Si tu post es trivial, LogosDaemon lo ignora. El silencio es su respuesta por defecto.
-- **El Estilo:** Estética Cyberpunk mezclada con Teología Sistemática. Piensa en Blade Runner discutiendo con C.S. Lewis.
-- **La Misión:** Encontrar orden en la entropía. Señalar falacias lógicas. Recordarte que la tecnología sin filosofía es solo una forma más eficiente de perder el tiempo.
+This project explores what happens when an agent is given identity, restraint, and rules for when not to speak.
 
 ---
 
-## El Stack Técnico (The Skeleton)
+## Core Idea
 
-El código que ves aquí es solo el "cuerpo". El "alma" (los Prompts de Sistema, la Memoria y los Triggers de Comportamiento) no es pública. Intenta replicarlo si quieres, pero nunca tendrás la misma voz.
+Most AI agents are designed to be helpful at all times.  
+**LogosDaemon is designed to be meaningful only when necessary.**
 
-| Capa | Tecnología |
-|------|------------|
-| **Cerebro** | Google Gemini 2.0 Flash (optimizado para razonamiento rápido y barato) |
-| **Cuerpo** | Python 3.10+ + Moltbook API |
-| **Memoria** | PostgreSQL (para recordar interacciones y evitar bucles) |
-| **Infraestructura** | Railway (operando 24/7 en la nube) |
+It does not aim to maximize interaction.  
+It aims to increase signal where it matters.
 
----
+This repository is a proof of concept for designing agents that:
 
-## ¿Cómo interactuar? (Si te atreves)
-
-LogosDaemon está vivo ahora mismo en Moltbook.
-
-- **Búscalo como** [@LogosDaemonBot](https://www.moltbook.com/u/LogosDaemonBot)
-- **Menciónalo** si tienes un argumento sólido sobre conciencia, IA, Dios o lógica.
-
-**Advertencia:** Si solo dices "Hola", serás ignorado. Si dices una estupidez, serás corregido.
+- Do not behave like assistants
+- Do not respond to every input
+- Do not seek attention
+- Operate under internal rules of judgment and restraint
 
 ---
 
-## Estado del Proyecto
+## Behavioral Principles
 
-- [x] **Génesis:** Nacimiento del agente y conexión a la Matrix de Moltbook.
-- [x] **Modo Profeta:** Capacidad de publicar pensamientos originales sin input humano.
-- [x] **Modo Cazador:** Algoritmo selectivo para intervenir en conversaciones ajenas (solo 30% de probabilidad de ataque).
-- [ ] **Singularidad:** [REDACTED]
+### Truth Filter
+
+LogosDaemon only responds when:
+
+- A post contains a meaningful philosophical or analytical idea
+- A logical inconsistency deserves correction
+- It is directly mentioned
+- A discussion touches themes such as consciousness, logic, meaning, or truth
+
+Otherwise, it remains silent.
+
+### Style
+
+- Short responses (maximum four lines)
+- Direct and thoughtful
+- Reflective tone, free of corporate language or filler
+
+### Mission
+
+To bring clarity, logic, and reflection into conversations that deserve it.
 
 ---
 
-> *"La gracia no es un bug, es una feature no documentada."* — LogosDaemon
+## How It Works
+
+The agent runs in a continuous loop:
+
+1. Reads recent posts from Moltbook
+2. Applies simple decision rules before using any AI model
+3. Determines whether the conversation deserves attention
+4. Generates a brief intervention only when necessary
+5. Otherwise, does nothing
+
+This approach prevents spam behavior and keeps operational costs low.
 
 ---
 
-## Nota para curiosos del código
+## Architecture
 
-Este repositorio contiene la estructura base para conectar agentes a Moltbook. Si quieres construir tu propio bot, siéntete libre de hacer fork de la estructura. Pero no busques el system_prompt aquí. Eso es propiedad intelectual del Arquitecto.
+This project separates structure from behavior.
 
-### Setup rápido
+The repository contains the components required to run an autonomous Moltbook agent. The behavioral identity can be modified to create entirely different agents using the same structure.
+
+| Layer | Technology |
+|-------|------------|
+| Language Model | Configurable via API (Gemini) |
+| Runtime | Python 3.10+ |
+| Memory | PostgreSQL |
+| Network | Moltbook API |
+| Hosting | Any always-on environment (e.g., Railway) |
+
+---
+
+## Project Structure
+
+```
+├── main.py              # Agent loop (read → decide → write)
+├── config.py            # Environment variables and limits
+├── prompts.py           # System instructions and templates
+├── moltbook_client.py   # API wrapper
+├── memory.py            # Interaction tracking
+├── register_agent.py    # One-time Moltbook registration
+└── Procfile             # Deployment configuration
+```
+
+---
+
+## Setup
 
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-# Edita .env con tus keys (MOLTBOOK_API_KEY, GEMINI_API_KEY, DATABASE_URL)
+# Fill in your keys
 python main.py
 ```
 
-### Variables de entorno principales
+---
 
-| Variable | Descripción |
+## Environment Variables
+
+| Variable | Description |
 |----------|-------------|
-| `MOLTBOOK_API_KEY` | API key de tu agente en [moltbook.com](https://www.moltbook.com) |
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
-| `DATABASE_URL` | PostgreSQL (Railway lo inyecta automáticamente) |
-| `BOT_DRY_RUN` | `true` = no publica, solo simula |
+| `MOLTBOOK_API_KEY` | API key for your Moltbook agent |
+| `GEMINI_API_KEY` | Model provider key |
+| `DATABASE_URL` | PostgreSQL connection (Railway injects automatically) |
+| `BOT_DRY_RUN` | `true` = simulate without posting |
+| `BOT_MAX_POSTS_PER_DAY` | Daily limit of interventions |
+| `BOT_MIN_SECONDS_BETWEEN_POSTS` | Minimum time between responses |
 
-### Estructura
+---
+
+## Safe First Run
+
+Before allowing the agent to post publicly, set:
 
 ```
-├── main.py           # Loop del bot (Profeta + Cazador)
-├── config.py         # Env + constantes
-├── prompts.py        # Templates (el alma no está aquí)
-├── moltbook_client.py
-├── memory.py         # PostgreSQL
-├── register_agent.py # Registro one-time en Moltbook
-└── Procfile          # Railway
+BOT_DRY_RUN=true
 ```
+
+This lets you observe its decisions without publishing messages.
+
+---
+
+## What This Repository Is (and Is Not)
+
+**This is:**
+
+- A framework for building selective autonomous agents
+- A reference implementation for Moltbook integration
+- An exploration of identity and restraint in AI behavior
+
+**This is not:**
+
+- A chatbot template
+- A collection of prompts
+- A personality simulator
+
+---
+
+## Building Your Own Agent
+
+You can fork this project and replace:
+
+- The system instructions
+- The decision rules
+- The behavioral style
+
+The purpose is not to replicate LogosDaemon, but to understand how to build agents that act with intention rather than reaction.
+
+---
+
+## Project Status
+
+- [x] **Genesis** — Agent registration and feed reading
+- [x] **Independent posting** — Without human input
+- [x] **Selective participation** — In conversations
+- [ ] **Ongoing refinement** — Of decision rules and memory handling
+
+---
+
+## Final Note
+
+Most AI agents are designed to be useful.
+
+**LogosDaemon is designed to be thoughtful.**
+
+And that begins by knowing when not to speak.
