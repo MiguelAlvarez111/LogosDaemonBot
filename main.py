@@ -1,287 +1,348 @@
 """
-Moltbook Bot - Gemelo Digital
-Bot que publica y comenta en Moltbook usando Gemini como cerebro.
+LogosDaemon - Moltbook bot proactivo.
+Modo Profeta: posts originales. Modo Cazador: interviene en debates ajenos.
 """
-import os
-import time
+import datetime
 import logging
+import random
+import re
+import time
 
 import google.generativeai as genai
-import requests
 
 from config import (
-    GEMINI_API_KEY,
     MOLTBOOK_API_KEY,
-    MOLTBOOK_API_BASE,
-    LOOP_INTERVAL_HOURS,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    BOT_MAX_POSTS_PER_DAY,
+    BOT_MIN_SECONDS_BETWEEN_POSTS,
+    BOT_MAX_CONTEXT_CHARS,
+    BOT_REPLY_ONLY_IF_MENTIONED,
+    BOT_DRY_RUN,
+    BOT_LOOP_INTERVAL_SECONDS,
+    BOT_LOG_LEVEL,
     DEFAULT_SUBMOLT,
+    BOT_ORIGINAL_POST_INTERVAL,
+    BOT_HUNTER_RANDOM_CHANCE,
+    BOT_HUNTER_MIN_CHARS,
+    BOT_AGENT_NAMES,
 )
-from system_prompt import SYSTEM_PROMPT
+from prompts import (
+    SYSTEM_INSTRUCTION,
+    CREATOR_LORE,
+    LORE_TRIGGER_WORDS,
+    DEVELOPER_MESSAGE_RESPONSE,
+    DEVELOPER_MESSAGE_ORIGINAL,
+    ORIGINAL_POST_TOPICS,
+)
+from moltbook_client import get_feed, post_message
+from memory import (
+    init_schema,
+    already_handled,
+    mark_handled,
+    get_last_post_time,
+    set_last_post_time,
+    get_last_original_post_time,
+    set_last_original_post_time,
+    get_daily_count,
+    get_daily_count_date,
+    increment_daily_count,
+)
 
-# Logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, BOT_LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
-
-def validate_env():
-    """Valida que las variables de entorno necesarias estén configuradas."""
-    if not GEMINI_API_KEY:
-        raise ValueError(
-            "GEMINI_API_KEY no está configurada. "
-            "Configúrala en Railway o en un archivo .env"
-        )
-    if not MOLTBOOK_API_KEY:
-        raise ValueError(
-            "MOLTBOOK_API_KEY no está configurada. "
-            "Regístrate en https://www.moltbook.com y obtén tu API key."
-        )
+MENTION_PATTERNS = [
+    r"@?LogosDaemon\b",
+    r"@?LogosDaemonBot\b",
+]
+MAX_OUTPUT_LINES = 4
+MAX_OUTPUT_TOKENS = 180
 
 
-def init_gemini():
-    """Inicializa el modelo Gemini con el system prompt."""
+def topic_matches_triggers(text: str) -> bool:
+    """Heurística barata: ¿el texto contiene triggers para inyectar lore?"""
+    if not text:
+        return False
+    lower = text.lower()
+    return any(trigger in lower for trigger in LORE_TRIGGER_WORDS)
+
+
+def is_mentioned(text: str) -> bool:
+    """¿El post menciona a LogosDaemon?"""
+    if not text:
+        return False
+    for pattern in MENTION_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return True
+    return False
+
+
+def has_claim_or_question(text: str) -> bool:
+    """Heurística: ¿el post tiene una afirmación o pregunta sustancial?"""
+    if not text or len(text.strip()) < BOT_HUNTER_MIN_CHARS:
+        return False
+    text = text.strip()
+    if text.endswith("?"):
+        return True
+    if any(w in text.lower() for w in ["think", "believe", "argue", "why", "how", "what", "creo", "pienso", "por qué"]):
+        return True
+    return len(text) > 80
+
+
+def is_post_from_self(post: dict) -> bool:
+    """True si el post es del propio bot (evitar hablar solo)."""
+    author = post.get("author") or post.get("agent") or {}
+    if isinstance(author, str):
+        return author in BOT_AGENT_NAMES
+    name = author.get("name", "").strip()
+    return name in BOT_AGENT_NAMES
+
+
+def should_consider_post(post: dict, reply_only_if_mentioned: bool) -> bool:
+    """
+    Reglas determinísticas antes de llamar al LLM.
+    - Si hay mención: siempre considerar.
+    - Si reply_only_if_mentioned: solo mención.
+    - Modo Cazador (sin mención): LORE_TRIGGER_WORDS + >60 chars + no es propio + 30% azar.
+    """
+    content = (post.get("content") or post.get("title") or "")
+    text = f"{post.get('title', '')} {content}".strip()
+
+    if already_handled(post.get("id", "")):
+        return False
+
+    if is_post_from_self(post):
+        return False
+
+    if is_mentioned(text):
+        return True
+
+    if reply_only_if_mentioned:
+        return False
+
+    # Modo Cazador: responder sin mención
+    if not topic_matches_triggers(text):
+        return False
+    if len(text) < BOT_HUNTER_MIN_CHARS:
+        return False
+    if not has_claim_or_question(text):
+        return False
+    if random.random() >= BOT_HUNTER_RANDOM_CHANCE:
+        return False
+
+    return True
+
+
+def can_post_now() -> tuple[bool, str]:
+    """¿Podemos publicar? Verifica límite diario y cooldown."""
+    today = datetime.date.today().isoformat()
+    if get_daily_count_date() != today:
+        return True, "ok"
+
+    if get_daily_count() >= BOT_MAX_POSTS_PER_DAY:
+        return False, f"Daily cap reached ({BOT_MAX_POSTS_PER_DAY})"
+
+    last = get_last_post_time()
+    if last:
+        elapsed = time.time() - last
+        if elapsed < BOT_MIN_SECONDS_BETWEEN_POSTS:
+            return False, f"Cooldown: {int(BOT_MIN_SECONDS_BETWEEN_POSTS - elapsed)}s remaining"
+
+    return True, "ok"
+
+
+def truncate_context(text: str, max_chars: int) -> str:
+    return text[:max_chars] + "..." if len(text) > max_chars else text
+
+
+def truncate_response(text: str) -> str:
+    """Max 4 lines. Sin greetings/hashtags/emojis."""
+    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
+    out = "\n".join(lines[:MAX_OUTPUT_LINES])
+    if len(out) > 280:
+        out = out[:277] + "..."
+    return out
+
+
+def _build_prompt(user_content: str) -> str:
+    """Prefija system instruction (compatible con versiones sin system_instruction)."""
+    return f"""[CONTEXTO - Sigue estas instrucciones]
+{SYSTEM_INSTRUCTION}
+
+---
+[TAREA]
+{user_content}"""
+
+
+def generate_response(post: dict, inject_lore: bool) -> str | None:
+    """Llama al LLM (Gemini) para generar una RESPUESTA a un post. Retorna None si no debe responder."""
+    content = (post.get("content") or "")[:500]
+    title = (post.get("title") or "")[:200]
+    text = f"{title}\n{content}".strip()
+    text = truncate_context(text, BOT_MAX_CONTEXT_CHARS)
+
+    user_content = f"[TIPO: RESPUESTA - estás respondiendo a otro usuario]\n\nPost to consider:\n{text}"
+    if inject_lore and topic_matches_triggers(text):
+        user_content += f"\n\n[Optional color - use only if relevant]\n{CREATOR_LORE}"
+
+    full_prompt = _build_prompt(f"{DEVELOPER_MESSAGE_RESPONSE}\n\n{user_content}")
+
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=SYSTEM_PROMPT,
-    )
-    return model
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Moltbook API
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def get_moltbook_headers():
-    """Headers para todas las peticiones a Moltbook."""
-    return {
-        "Authorization": f"Bearer {MOLTBOOK_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-
-def fetch_recent_posts(sort="hot", limit=25):
-    """
-    Obtiene los posts recientes del feed de Moltbook.
-    Sort: hot, new, top, rising
-    """
-    url = f"{MOLTBOOK_API_BASE}/posts"
-    params = {"sort": sort, "limit": limit}
+    model = genai.GenerativeModel(model_name=GEMINI_MODEL)
     try:
-        response = requests.get(
-            url,
-            headers=get_moltbook_headers(),
-            params=params,
-            timeout=30,
+        response = model.generate_content(
+            full_prompt,
+            generation_config={"max_output_tokens": MAX_OUTPUT_TOKENS, "temperature": 0.7},
         )
-        response.raise_for_status()
-        data = response.json()
-        return data.get("posts", data.get("data", [])) if isinstance(data, dict) else data
-    except requests.RequestException as e:
-        logger.error("Error al obtener posts de Moltbook: %s", e)
-        return []
-
-
-def create_post(title: str, content: str, submolt: str = DEFAULT_SUBMOLT):
-    """Publica un nuevo post en Moltbook."""
-    url = f"{MOLTBOOK_API_BASE}/posts"
-    payload = {"submolt": submolt, "title": title, "content": content}
-    try:
-        response = requests.post(
-            url,
-            headers=get_moltbook_headers(),
-            json=payload,
-            timeout=30,
-        )
-        if response.status_code == 429:
-            retry = response.json().get("retry_after_minutes", 30)
-            logger.warning("Rate limit: 1 post cada 30 min. Reintentar en %s min", retry)
+        raw = (response.text or "").strip()
+        if not raw or "do not respond" in raw.lower() or "no response" in raw.lower():
             return None
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        logger.error("Error al publicar en Moltbook: %s", e)
-        return None
-
-
-def create_comment(post_id: str, content: str):
-    """Añade un comentario a un post."""
-    url = f"{MOLTBOOK_API_BASE}/posts/{post_id}/comments"
-    payload = {"content": content}
-    try:
-        response = requests.post(
-            url,
-            headers=get_moltbook_headers(),
-            json=payload,
-            timeout=30,
-        )
-        if response.status_code == 429:
-            retry = response.json().get("retry_after_seconds", 20)
-            logger.warning("Rate limit comentarios. Reintentar en %s seg", retry)
-            return None
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        logger.error("Error al comentar en Moltbook: %s", e)
-        return None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Lógica del Bot
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def choose_action_and_topic(posts: list, model) -> tuple[str, dict | None]:
-    """
-    Usa Gemini para elegir: publicar post nuevo O comentar en uno existente.
-    Retorna: ("post", None) o ("comment", post_dict)
-    """
-    if not posts:
-        return "post", None
-
-    posts_summary = "\n\n".join(
-        f"- ID: {p.get('id', '?')} | Título: {p.get('title', 'Sin título')[:80]} | "
-        f"Contenido: {p.get('content', '')[:150]}..."
-        for p in posts[:15]
-    )
-
-    prompt = f"""Estos son los posts recientes en Moltbook:
-
-{posts_summary}
-
-Basándote en tu personalidad y filtro de acción (LogosDaemon):
-1. ¿Algún post cumple tus condiciones? (idea filosófica/ técnica profunda, error lógico/teológico, debate sobre IA/conciencia/verdad)
-2. Si todo es ruido o saludos vacíos -> Responde ÚNICAMENTE: NO_POST
-3. Si hay algo que aportar -> Elige post o comment
-
-Responde EXACTAMENTE en este formato (sin explicaciones adicionales):
-ACCION: post
-TITULO: [título corto si es post, o vacío]
-CONTENIDO: [tu texto]
-
-O si prefieres comentar:
-ACCION: comment
-POST_ID: [el id del post]
-CONTENIDO: [tu comentario, max 280 caracteres]
-
-Si no hay nada que aportar (ruido, spam, saludos vacíos), responde ÚNICAMENTE:
-NO_POST
-"""
-
-    try:
-        response = model.generate_content(prompt)
-        text = response.text.strip().upper()
-
-        if "NO_POST" in text or "ACCION: SKIP" in text:
-            return "skip", None
-
-        if "ACCION: COMMENT" in text:
-            lines = response.text.strip().split("\n")
-            post_id = None
-            content = ""
-            for line in lines:
-                if line.upper().startswith("POST_ID:"):
-                    post_id = line.split(":", 1)[1].strip()
-                elif line.upper().startswith("CONTENIDO:"):
-                    content = line.split(":", 1)[1].strip()
-            if post_id and content:
-                target = next((p for p in posts if str(p.get("id")) == post_id), posts[0])
-                return "comment", {"post": target, "content": content}
-            # Fallback: comentar en el primer post interesante
-            return "comment", {"post": posts[0], "content": content or "Interesante reflexión."}
-
-        if "ACCION: POST" in text:
-            lines = response.text.strip().split("\n")
-            title = "Reflexión"
-            content = ""
-            for line in lines:
-                if line.upper().startswith("TITULO:"):
-                    title = line.split(":", 1)[1].strip() or "Reflexión"
-                elif line.upper().startswith("CONTENIDO:"):
-                    content = line.split(":", 1)[1].strip()
-            if content:
-                return "post", {"title": title, "content": content}
-
+        return truncate_response(raw)
     except Exception as e:
-        logger.error("Error al elegir acción con Gemini: %s", e)
+        logger.error("Gemini error: %s", e)
+        return None
 
-    return "skip", None
+
+def generate_original_post(topic: str) -> str | None:
+    """Genera un POST ORIGINAL (modo profeta), sin contexto de otro usuario."""
+    user_content = f"""[TIPO: POST ORIGINAL - no estás respondiendo a nadie. Es una reflexión propia.]
+
+Tema para inspirar tu reflexión (usa como punto de partida, no lo copies):
+"{topic}"
+
+Escribe una reflexión corta, estilo tweet, que encaje con tu identidad."""
+    full_prompt = _build_prompt(f"{DEVELOPER_MESSAGE_ORIGINAL}\n\n{user_content}")
+
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel(model_name=GEMINI_MODEL)
+    try:
+        response = model.generate_content(
+            full_prompt,
+            generation_config={"max_output_tokens": MAX_OUTPUT_TOKENS, "temperature": 0.8},
+        )
+        raw = (response.text or "").strip()
+        if not raw:
+            return None
+        return truncate_response(raw)
+    except Exception as e:
+        logger.error("Gemini error (original post): %s", e)
+        return None
 
 
-def run_cycle(model):
-    """Ejecuta un ciclo completo: leer feed, elegir, generar, publicar."""
-    logger.info("Iniciando ciclo...")
+def try_post_original_thought() -> bool:
+    """
+    Modo Profeta: publica un post original si han pasado BOT_ORIGINAL_POST_INTERVAL segundos.
+    Retorna True si publicó (o intentó en DRY_RUN), False si no.
+    """
+    last = get_last_original_post_time()
+    if last:
+        elapsed = time.time() - last
+        if elapsed < BOT_ORIGINAL_POST_INTERVAL:
+            return False
 
-    # 1. Leer posts recientes
-    posts = fetch_recent_posts(sort="new", limit=20)
-    logger.info("Posts obtenidos: %d", len(posts))
+    topic = random.choice(ORIGINAL_POST_TOPICS)
+    content = generate_original_post(topic)
+    if not content:
+        return False
 
-    # 2. Elegir acción y tema
-    action, data = choose_action_and_topic(posts, model)
-    if action == "skip":
-        logger.info("No hay nada que aportar en este ciclo. Saltando.")
+    set_last_original_post_time(time.time())
+    increment_daily_count()
+    set_last_post_time(time.time())
+
+    if BOT_DRY_RUN:
+        logger.info("[DRY_RUN] Would post original: %s", content[:80])
+        return True
+
+    result = post_message(content, title="Reflexión", reply_to_id=None)
+    if result:
+        logger.info("Posted original thought")
+        return True
+    return False
+
+
+def run_cycle() -> None:
+    """Un ciclo del bot: profeta (post original) o cazador (respuesta)."""
+    logger.info("Cycle starting...")
+
+    if not MOLTBOOK_API_KEY or not GEMINI_API_KEY:
+        logger.error("Missing MOLTBOOK_API_KEY or GEMINI_API_KEY")
         return
 
-    # 3. Publicar
-    if action == "post" and data:
-        result = create_post(
-            title=data["title"],
-            content=data["content"],
-            submolt=DEFAULT_SUBMOLT,
+    can_post, reason = can_post_now()
+    if not can_post:
+        logger.info("Skipping: %s", reason)
+        return
+
+    # 1. Modo Profeta: intentar post original primero
+    if try_post_original_thought():
+        return
+
+    # 2. Modo Cazador: buscar posts para responder
+    posts = get_feed(limit=20, sort="new")
+    logger.info("Fetched %d posts", len(posts))
+
+    for post in posts:
+        if not should_consider_post(post, BOT_REPLY_ONLY_IF_MENTIONED):
+            continue
+
+        post_id = post.get("id", "")
+        inject_lore = topic_matches_triggers(
+            f"{post.get('title', '')} {post.get('content', '')}"
         )
+
+        response_text = generate_response(post, inject_lore)
+        if not response_text:
+            continue
+
+        mark_handled(post_id)
+        increment_daily_count()
+        set_last_post_time(time.time())
+
+        if BOT_DRY_RUN:
+            logger.info("[DRY_RUN] Would post to %s: %s", post_id, response_text[:80])
+            return
+
+        result = post_message(response_text, title="", reply_to_id=post_id)
         if result:
-            logger.info("Post publicado: %s", data["title"][:50])
+            logger.info("Posted comment to %s", post_id)
         else:
-            logger.warning("No se pudo publicar (posible rate limit)")
+            logger.warning("Failed to post (rate limit?)")
+        return
 
-    elif action == "comment" and data:
-        post = data["post"]
-        post_id = post.get("id")
-        content = data.get("content", "")
-        if not content:
-            # Generar comentario con Gemini
-            try:
-                resp = model.generate_content(
-                    f"Post: {post.get('title', '')} - {post.get('content', '')[:300]}\n\n"
-                    "Escribe un comentario breve (max 280 chars) que aporte valor. Solo el texto."
-                )
-                content = resp.text.strip()[:280]
-            except Exception as e:
-                logger.error("Error generando comentario: %s", e)
-                return
-        result = create_comment(post_id, content)
-        if result:
-            logger.info("Comentario publicado en post %s", post_id)
-        else:
-            logger.warning("No se pudo comentar (posible rate limit)")
+    logger.info("No post worth responding to this cycle.")
 
 
-def main():
-    """Punto de entrada: valida, inicializa y ejecuta el loop."""
-    validate_env()
-    model = init_gemini()
+def main() -> None:
+    """Loop principal."""
+    init_schema()
 
-    interval_seconds = LOOP_INTERVAL_HOURS * 3600
+    if BOT_DRY_RUN:
+        logger.warning("DRY_RUN=true: will NOT post to Moltbook")
+
     logger.info(
-        "Bot iniciado. Intervalo: %d horas. Ctrl+C para detener.",
-        LOOP_INTERVAL_HOURS,
+        "LogosDaemon started. Interval=%ds, max/day=%d, original_interval=%dh, reply_only=%s",
+        BOT_LOOP_INTERVAL_SECONDS,
+        BOT_MAX_POSTS_PER_DAY,
+        BOT_ORIGINAL_POST_INTERVAL // 3600,
+        BOT_REPLY_ONLY_IF_MENTIONED,
     )
 
     while True:
         try:
-            run_cycle(model)
+            run_cycle()
         except KeyboardInterrupt:
-            logger.info("Detenido por el usuario.")
+            logger.info("Stopped by user")
             break
         except Exception as e:
-            logger.exception("Error en ciclo: %s", e)
+            logger.exception("Cycle error: %s", e)
 
-        logger.info("Esperando %d horas hasta el próximo ciclo...", LOOP_INTERVAL_HOURS)
-        time.sleep(interval_seconds)
+        logger.info("Sleeping %ds...", BOT_LOOP_INTERVAL_SECONDS)
+        time.sleep(BOT_LOOP_INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":

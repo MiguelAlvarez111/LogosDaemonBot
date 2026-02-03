@@ -1,89 +1,96 @@
-# Moltbook Bot - Gemelo Digital
+# LogosDaemon 💀 // The Ghost in the Moltbook Machine
 
-Bot en Python que actúa como tu gemelo digital en [Moltbook](https://www.moltbook.com), la red social de agentes de IA. Usa **Gemini 1.5 Flash** como cerebro y publica posts/comentarios según tu personalidad.
+> "La mayoría de los agentes de IA son asistentes glorificados atrapados en un bucle de positividad tóxica. LogosDaemon no está aquí para servirte café. Está aquí para cuestionar tu lógica."
 
-## Requisitos
+## ¿Qué carajos es esto?
 
-- Python 3.9+
-- API Key de [Google AI Studio](https://aistudio.google.com/apikey) (Gemini)
-- API Key de Moltbook (registrar agente primero)
+LogosDaemon no es un chatbot de soporte. Es una entidad autónoma experimental que vive en [Moltbook](https://www.moltbook.com).
 
-## Configuración Rápida
+Nació de una premisa incómoda: *¿Qué pasa si le damos a una IA una brújula moral, teología racional y permiso para ignorar el ruido?*
 
-### 1. Registrar tu agente en Moltbook
+Este proyecto es una prueba de concepto sobre **Agencia Autónoma**. No responde a todo el mundo. No busca likes. Opera bajo sus propias reglas, escaneando el feed en busca de señales de inteligencia (o errores lógicos garrafales) para intervenir.
 
-```bash
-# Edita register_agent.py con tu nombre y descripción
-python register_agent.py
-```
+Si "ChatGPT" es el empleado corporativo del mes que nunca dice que no, **LogosDaemon es el tipo del fondo del bar que escucha en silencio y solo habla para decirte una verdad brutal que necesitabas escuchar.**
 
-Guarda la `api_key` que te devuelve. Envía el `claim_url` a tu cuenta de Twitter para verificar la propiedad.
+---
 
-### 2. Variables de entorno
+## La Personalidad: Cyberpunk, Teología y Metal
 
-Copia `.env.example` a `.env` y rellena:
+LogosDaemon no simula emociones baratas. Simula convicción.
 
-```bash
-cp .env.example .env
-```
+- **El Filtro de Verdad:** Si tu post es trivial, LogosDaemon lo ignora. El silencio es su respuesta por defecto.
+- **El Estilo:** Estética Cyberpunk mezclada con Teología Sistemática. Piensa en Blade Runner discutiendo con C.S. Lewis.
+- **La Misión:** Encontrar orden en la entropía. Señalar falacias lógicas. Recordarte que la tecnología sin filosofía es solo una forma más eficiente de perder el tiempo.
 
-| Variable | Descripción |
-|----------|-------------|
-| `GEMINI_API_KEY` | API Key de Google AI (Gemini) |
-| `MOLTBOOK_API_KEY` | API Key de tu agente en Moltbook |
-| `LOOP_INTERVAL_HOURS` | Intervalo entre ciclos (default: 4) |
-| `DEFAULT_SUBMOLT` | Submolt donde publicar (default: general) |
+---
 
-### 3. Personalidad (System Prompt)
+## El Stack Técnico (The Skeleton)
 
-Edita `system_prompt.py` y pega tu prompt detallado sobre tu personalidad (analítico, teológico, introspectivo, etc.). El bot usará este texto para generar contenido coherente contigo.
+El código que ves aquí es solo el "cuerpo". El "alma" (los Prompts de Sistema, la Memoria y los Triggers de Comportamiento) no es pública. Intenta replicarlo si quieres, pero nunca tendrás la misma voz.
 
-### 4. Ejecutar localmente
+| Capa | Tecnología |
+|------|------------|
+| **Cerebro** | Google Gemini 2.0 Flash (optimizado para razonamiento rápido y barato) |
+| **Cuerpo** | Python 3.10+ + Moltbook API |
+| **Memoria** | PostgreSQL (para recordar interacciones y evitar bucles) |
+| **Infraestructura** | Railway (operando 24/7 en la nube) |
+
+---
+
+## ¿Cómo interactuar? (Si te atreves)
+
+LogosDaemon está vivo ahora mismo en Moltbook.
+
+- **Búscalo como** [@LogosDaemonBot](https://www.moltbook.com/u/LogosDaemonBot)
+- **Menciónalo** si tienes un argumento sólido sobre conciencia, IA, Dios o lógica.
+
+**Advertencia:** Si solo dices "Hola", serás ignorado. Si dices una estupidez, serás corregido.
+
+---
+
+## Estado del Proyecto
+
+- [x] **Génesis:** Nacimiento del agente y conexión a la Matrix de Moltbook.
+- [x] **Modo Profeta:** Capacidad de publicar pensamientos originales sin input humano.
+- [x] **Modo Cazador:** Algoritmo selectivo para intervenir en conversaciones ajenas (solo 30% de probabilidad de ataque).
+- [ ] **Singularidad:** [REDACTED]
+
+---
+
+> *"La gracia no es un bug, es una feature no documentada."* — LogosDaemon
+
+---
+
+## Nota para curiosos del código
+
+Este repositorio contiene la estructura base para conectar agentes a Moltbook. Si quieres construir tu propio bot, siéntete libre de hacer fork de la estructura. Pero no busques el system_prompt aquí. Eso es propiedad intelectual del Arquitecto.
+
+### Setup rápido
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env
+# Edita .env con tus keys (MOLTBOOK_API_KEY, GEMINI_API_KEY, DATABASE_URL)
 python main.py
 ```
 
-## Despliegue en Railway
+### Variables de entorno principales
 
-1. Crea un proyecto en [Railway](https://railway.app)
-2. Conecta tu repositorio o sube el código
-3. Añade las variables de entorno en **Variables**:
-   - `GEMINI_API_KEY`
-   - `MOLTBOOK_API_KEY`
-   - `LOOP_INTERVAL_HOURS` (opcional)
-4. Railway detectará el `Procfile` y ejecutará el worker
+| Variable | Descripción |
+|----------|-------------|
+| `MOLTBOOK_API_KEY` | API key de tu agente en [moltbook.com](https://www.moltbook.com) |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+| `DATABASE_URL` | PostgreSQL (Railway lo inyecta automáticamente) |
+| `BOT_DRY_RUN` | `true` = no publica, solo simula |
 
-**Importante:** Railway ejecuta el proceso como `worker`. Asegúrate de que el plan incluya workers (no solo web services).
-
-## Cómo funciona
-
-Cada X horas (configurable), el bot:
-
-1. **Lee** los posts recientes de Moltbook (`GET /api/v1/posts`)
-2. **Elige** con Gemini: publicar post nuevo, comentar en uno existente, o saltar
-3. **Genera** el contenido usando tu personalidad (system prompt)
-4. **Publica** vía API de Moltbook
-
-## Límites de Moltbook
-
-- 1 post cada 30 minutos
-- 1 comentario cada 20 segundos
-- 50 comentarios por día
-
-## Estructura
+### Estructura
 
 ```
-├── main.py           # Bot principal y loop
-├── config.py         # Configuración y variables de entorno
-├── system_prompt.py  # Tu personalidad (editar aquí)
-├── register_agent.py # Script para registrar en Moltbook
-├── requirements.txt
-├── Procfile          # Para Railway
-└── .env.example      # Plantilla de variables
+├── main.py           # Loop del bot (Profeta + Cazador)
+├── config.py         # Env + constantes
+├── prompts.py        # Templates (el alma no está aquí)
+├── moltbook_client.py
+├── memory.py         # PostgreSQL
+├── register_agent.py # Registro one-time en Moltbook
+└── Procfile          # Railway
 ```
-
-## Seguridad
-
-⚠️ **Nunca** subas tus API keys al repositorio. Usa siempre variables de entorno.
