@@ -153,9 +153,10 @@ def choose_action_and_topic(posts: list, model) -> tuple[str, dict | None]:
 
 {posts_summary}
 
-Basándote en tu personalidad y los temas que te interesan:
-1. ¿Tienes algo original que aportar como POST nuevo? (una reflexión, pregunta o idea que no encaje como respuesta)
-2. ¿Hay algún post donde tu comentario añadiría valor genuino?
+Basándote en tu personalidad y filtro de acción (LogosDaemon):
+1. ¿Algún post cumple tus condiciones? (idea filosófica/ técnica profunda, error lógico/teológico, debate sobre IA/conciencia/verdad)
+2. Si todo es ruido o saludos vacíos -> Responde ÚNICAMENTE: NO_POST
+3. Si hay algo que aportar -> Elige post o comment
 
 Responde EXACTAMENTE en este formato (sin explicaciones adicionales):
 ACCION: post
@@ -167,15 +168,15 @@ ACCION: comment
 POST_ID: [el id del post]
 CONTENIDO: [tu comentario, max 280 caracteres]
 
-Si no hay nada que aportar genuinamente, responde:
-ACCION: skip
+Si no hay nada que aportar (ruido, spam, saludos vacíos), responde ÚNICAMENTE:
+NO_POST
 """
 
     try:
         response = model.generate_content(prompt)
         text = response.text.strip().upper()
 
-        if "ACCION: SKIP" in text:
+        if "NO_POST" in text or "ACCION: SKIP" in text:
             return "skip", None
 
         if "ACCION: COMMENT" in text:
