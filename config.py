@@ -37,6 +37,11 @@ BOT_AGENT_NAMES = ["LogosDaemon", "LogosDaemonBot"]  # no responder a posts prop
 # Submolt por defecto
 DEFAULT_SUBMOLT = os.getenv("DEFAULT_SUBMOLT", "general")
 
+# Longitud de respuestas
+BOT_MAX_RESPONSE_LINES = int(os.getenv("BOT_MAX_RESPONSE_LINES", "8"))
+BOT_MAX_RESPONSE_CHARS = int(os.getenv("BOT_MAX_RESPONSE_CHARS", "600"))
+BOT_MAX_OUTPUT_TOKENS = int(os.getenv("BOT_MAX_OUTPUT_TOKENS", "400"))
+
 # Logging
 BOT_LOG_LEVEL = os.getenv("BOT_LOG_LEVEL", "INFO")
 

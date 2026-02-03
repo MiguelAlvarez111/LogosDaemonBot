@@ -46,7 +46,7 @@ Otherwise, it remains silent.
 
 ### Style
 
-- Short responses (maximum four lines)
+- Concise responses (up to 8 lines, ~600 characters)
 - Direct and thoughtful
 - Reflective tone, free of corporate language or filler
 
@@ -58,15 +58,21 @@ To bring clarity, logic, and reflection into conversations that deserve it.
 
 ## How It Works
 
-The agent runs in a continuous loop:
+The agent runs in a continuous loop with two modes:
 
-1. Reads recent posts from Moltbook
-2. Applies simple decision rules before using any AI model
-3. Determines whether the conversation deserves attention
-4. Generates a brief intervention only when necessary
+**Prophet Mode** — Publishes original thoughts at configurable intervals (default: every hour). No human input required.
+
+**Hunter Mode** — Scans the feed for posts matching trigger topics (consciousness, logic, meaning, etc.). Responds to ~30% of valid candidates to avoid saturation.
+
+Each cycle:
+
+1. Tries to post an original thought (if interval elapsed)
+2. Otherwise, reads recent posts from Moltbook
+3. Applies decision rules before calling the model
+4. Generates an intervention only when warranted
 5. Otherwise, does nothing
 
-This approach prevents spam behavior and keeps operational costs low.
+This approach prevents spam and keeps operational costs low.
 
 ---
 
@@ -113,14 +119,21 @@ python main.py
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `MOLTBOOK_API_KEY` | API key for your Moltbook agent |
-| `GEMINI_API_KEY` | Model provider key |
-| `DATABASE_URL` | PostgreSQL connection (Railway injects automatically) |
-| `BOT_DRY_RUN` | `true` = simulate without posting |
-| `BOT_MAX_POSTS_PER_DAY` | Daily limit of interventions |
-| `BOT_MIN_SECONDS_BETWEEN_POSTS` | Minimum time between responses |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MOLTBOOK_API_KEY` | — | API key for your Moltbook agent |
+| `GEMINI_API_KEY` | — | Model provider key |
+| `DATABASE_URL` | — | PostgreSQL (Railway injects automatically) |
+| `BOT_DRY_RUN` | `true` | `false` = post for real |
+| `BOT_REPLY_ONLY_IF_MENTIONED` | `false` | `false` = Hunter mode active |
+| `BOT_ORIGINAL_POST_INTERVAL` | `3600` | Seconds between original posts (1h) |
+| `BOT_MAX_POSTS_PER_DAY` | `12` | Daily limit |
+| `BOT_MIN_SECONDS_BETWEEN_POSTS` | `600` | Cooldown between any action (10 min) |
+| `BOT_HUNTER_RANDOM_CHANCE` | `0.3` | 30% chance to respond to valid posts |
+| `BOT_MAX_RESPONSE_LINES` | `8` | Max lines per response |
+| `BOT_MAX_RESPONSE_CHARS` | `600` | Max characters per response |
+
+See [RAILWAY_SETUP.md](RAILWAY_SETUP.md) for a full deployment checklist.
 
 ---
 
@@ -167,8 +180,9 @@ The purpose is not to replicate LogosDaemon, but to understand how to build agen
 ## Project Status
 
 - [x] **Genesis** — Agent registration and feed reading
-- [x] **Independent posting** — Without human input
-- [x] **Selective participation** — In conversations
+- [x] **Prophet Mode** — Original posts without human input
+- [x] **Hunter Mode** — Selective participation in conversations
+- [x] **Configurable response length** — Up to 8 lines, 600 chars
 - [ ] **Ongoing refinement** — Of decision rules and memory handling
 
 ---

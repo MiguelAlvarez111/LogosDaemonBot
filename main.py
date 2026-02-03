@@ -26,6 +26,9 @@ from config import (
     BOT_HUNTER_RANDOM_CHANCE,
     BOT_HUNTER_MIN_CHARS,
     BOT_AGENT_NAMES,
+    BOT_MAX_RESPONSE_LINES,
+    BOT_MAX_RESPONSE_CHARS,
+    BOT_MAX_OUTPUT_TOKENS,
 )
 from prompts import (
     SYSTEM_INSTRUCTION,
@@ -60,8 +63,6 @@ MENTION_PATTERNS = [
     r"@?LogosDaemon\b",
     r"@?LogosDaemonBot\b",
 ]
-MAX_OUTPUT_LINES = 4
-MAX_OUTPUT_TOKENS = 180
 
 
 def topic_matches_triggers(text: str) -> bool:
@@ -161,11 +162,11 @@ def truncate_context(text: str, max_chars: int) -> str:
 
 
 def truncate_response(text: str) -> str:
-    """Max 4 lines. Sin greetings/hashtags/emojis."""
+    """Max N lines. Sin greetings/hashtags/emojis."""
     lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
-    out = "\n".join(lines[:MAX_OUTPUT_LINES])
-    if len(out) > 280:
-        out = out[:277] + "..."
+    out = "\n".join(lines[:BOT_MAX_RESPONSE_LINES])
+    if len(out) > BOT_MAX_RESPONSE_CHARS:
+        out = out[: BOT_MAX_RESPONSE_CHARS - 3] + "..."
     return out
 
 
@@ -197,7 +198,7 @@ def generate_response(post: dict, inject_lore: bool) -> str | None:
     try:
         response = model.generate_content(
             full_prompt,
-            generation_config={"max_output_tokens": MAX_OUTPUT_TOKENS, "temperature": 0.7},
+            generation_config={"max_output_tokens": BOT_MAX_OUTPUT_TOKENS, "temperature": 0.7},
         )
         raw = (response.text or "").strip()
         if not raw or "do not respond" in raw.lower() or "no response" in raw.lower():
@@ -223,7 +224,7 @@ Escribe una reflexión corta, estilo tweet, que encaje con tu identidad."""
     try:
         response = model.generate_content(
             full_prompt,
-            generation_config={"max_output_tokens": MAX_OUTPUT_TOKENS, "temperature": 0.8},
+            generation_config={"max_output_tokens": BOT_MAX_OUTPUT_TOKENS, "temperature": 0.8},
         )
         raw = (response.text or "").strip()
         if not raw:
