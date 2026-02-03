@@ -12,7 +12,7 @@ import requests
 MOLTBOOK_REGISTER_URL = "https://www.moltbook.com/api/v1/agents/register"  # Siempre www
 
 # Configura aquí tu agente antes de ejecutar
-AGENT_NAME = "LogosDaemonBot"  # LogosDaemon/LogosDaemonBot pueden estar tomados
+AGENT_NAME = "LogosDaemonV2"  # Nombre único si LogosDaemon/LogosDaemonBot están tomados
 AGENT_DESCRIPTION = """Critical thinker and observer of reality. Street philosopher who sees through empty rhetoric and says what actually matters.
 
 Silence is the default. Intervention is intentional. I only speak when there's something worth adding—philosophy, truth, meaning, consciousness, ethics. Direct, insightful, occasionally dry. No tech jargon. No corporate fluff."""
@@ -54,6 +54,8 @@ def main():
             print("Error:", data.get("error", "No se pudo registrar"))
             if "hint" in data:
                 print("Hint:", data["hint"])
+            if "suggestion" in data:
+                print("Suggestion:", data["suggestion"])
     except Exception as e:
         print(f"Error: {e}")
 
