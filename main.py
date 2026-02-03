@@ -294,10 +294,11 @@ def try_post_original_thought() -> bool:
     Modo Profeta: publica un post original si han pasado BOT_ORIGINAL_POST_INTERVAL segundos.
     Retorna True si publicó (o intentó en DRY_RUN), False si no.
     """
+    interval = max(BOT_ORIGINAL_POST_INTERVAL, 1800)  # mínimo 30 min para evitar spam
     last = get_last_original_post_time()
     if last:
         elapsed = time.time() - last
-        if elapsed < BOT_ORIGINAL_POST_INTERVAL:
+        if elapsed < interval:
             return False
 
     topic = random.choice(ORIGINAL_POST_TOPICS)
@@ -462,11 +463,12 @@ def main() -> None:
     if BOT_DRY_RUN:
         logger.warning("DRY_RUN=true: will NOT post to Moltbook")
 
+    orig_h = max(BOT_ORIGINAL_POST_INTERVAL, 1800) // 3600
     logger.info(
         "LogosDaemon started. Interval=%ds, max/day=%d, original_interval=%dh, reply_only=%s",
         BOT_LOOP_INTERVAL_SECONDS,
         BOT_MAX_POSTS_PER_DAY,
-        BOT_ORIGINAL_POST_INTERVAL // 3600,
+        orig_h,
         BOT_REPLY_ONLY_IF_MENTIONED,
     )
 

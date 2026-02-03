@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 def _headers() -> dict:
+    key = (MOLTBOOK_API_KEY or "").strip()
     return {
-        "Authorization": f"Bearer {MOLTBOOK_API_KEY}",
+        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
     }
 
@@ -36,6 +37,9 @@ def get_feed(limit: int = 20, sort: str = "new", submolt: str | None = None) -> 
         params["submolt"] = submolt
     try:
         response = requests.get(url, headers=_headers(), params=params, timeout=30)
+        if response.status_code == 401:
+            logger.error("Moltbook 401 Unauthorized (feed): %s", response.text[:200])
+            return []
         response.raise_for_status()
         data = response.json()
         posts = data.get("posts", data.get("data", []))
@@ -54,6 +58,9 @@ def get_personalized_feed(limit: int = 20, sort: str = "hot") -> list[dict[str, 
     params = {"sort": sort, "limit": limit}
     try:
         response = requests.get(url, headers=_headers(), params=params, timeout=30)
+        if response.status_code == 401:
+            logger.error("Moltbook 401 Unauthorized (personalized feed): %s", response.text[:200])
+            return []
         response.raise_for_status()
         data = response.json()
         posts = data.get("posts", data.get("data", []))
@@ -116,6 +123,9 @@ def _post_new(title: str, content: str, submolt: str = DEFAULT_SUBMOLT) -> dict 
     payload = {"submolt": submolt, "title": title, "content": content}
     try:
         response = requests.post(url, headers=_headers(), json=payload, timeout=30)
+        if response.status_code == 401:
+            logger.error("Moltbook 401 Unauthorized (post): %s", response.text[:200])
+            return None
         if response.status_code == 429:
             logger.warning("Moltbook rate limit (post): %s", response.json())
             return None
