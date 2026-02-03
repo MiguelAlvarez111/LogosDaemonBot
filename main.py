@@ -250,16 +250,15 @@ def try_post_original_thought() -> bool:
     if not content:
         return False
 
-    set_last_original_post_time(time.time())
-    increment_daily_count()
-    set_last_post_time(time.time())
-
     if BOT_DRY_RUN:
         logger.info("[DRY_RUN] Would post original: %s", content[:80])
         return True
 
     result = post_message(content, title="Reflexión", reply_to_id=None)
     if result:
+        set_last_original_post_time(time.time())
+        increment_daily_count()
+        set_last_post_time(time.time())
         logger.info("Posted original thought")
         return True
     return False

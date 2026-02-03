@@ -27,7 +27,7 @@ BOT_DRY_RUN = os.getenv("BOT_DRY_RUN", "true").lower() == "true"
 BOT_LOOP_INTERVAL_SECONDS = int(os.getenv("BOT_LOOP_INTERVAL_SECONDS", "300"))  # 5 min check
 
 # Modo Profeta: posts originales
-BOT_ORIGINAL_POST_INTERVAL = int(os.getenv("BOT_ORIGINAL_POST_INTERVAL", "21600"))  # 6 horas en segundos
+BOT_ORIGINAL_POST_INTERVAL = int(os.getenv("BOT_ORIGINAL_POST_INTERVAL", "3600"))  # 1 hora en segundos (posts originales)
 
 # Modo Cazador: responder sin mención
 BOT_HUNTER_RANDOM_CHANCE = float(os.getenv("BOT_HUNTER_RANDOM_CHANCE", "0.3"))  # 30% de candidatos válidos
